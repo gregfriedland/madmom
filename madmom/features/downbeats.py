@@ -24,6 +24,25 @@ from ..ml.hmm import HiddenMarkovModel
 from ..processors import ParallelProcessor, Processor, SequentialProcessor
 
 
+def filter_downbeats(beats):
+    """
+
+    Parameters
+    ----------
+    beats : numpy array, shape (num_beats, 2)
+        Array with beats and their position inside the bar as the second
+        column.
+
+    Returns
+    -------
+    downbeats : numpy array
+        Array with downbeat times.
+
+    """
+    # return only downbeats (timestamps)
+    return beats[beats[:, 1] == 1][:, 0]
+
+
 # downbeat tracking, i.e. track beats and downbeats directly from signal
 class RNNDownBeatProcessor(SequentialProcessor):
     """
@@ -150,8 +169,6 @@ class DBNDownBeatTrackingProcessor(Processor):
     correct : bool, optional
         Correct the beats (i.e. align them to the nearest peak of the
         (down-)beat activation function).
-    downbeats : bool, optional
-        Report downbeats only, not all beats and their position inside the bar.
     fps : float, optional
         Frames per second.
 
@@ -201,7 +218,7 @@ class DBNDownBeatTrackingProcessor(Processor):
     def __init__(self, beats_per_bar, min_bpm=MIN_BPM, max_bpm=MAX_BPM,
                  num_tempi=NUM_TEMPI, transition_lambda=TRANSITION_LAMBDA,
                  observation_lambda=OBSERVATION_LAMBDA, threshold=THRESHOLD,
-                 correct=CORRECT, downbeats=False, fps=None, **kwargs):
+                 correct=CORRECT, fps=None, **kwargs):
         # pylint: disable=unused-argument
         # pylint: disable=no-name-in-module
         # expand arguments to arrays
@@ -248,7 +265,6 @@ class DBNDownBeatTrackingProcessor(Processor):
         self.beats_per_bar = beats_per_bar
         self.threshold = threshold
         self.correct = correct
-        self.downbeats = downbeats
         self.fps = fps
 
     def process(self, activations, **kwargs):
@@ -268,10 +284,8 @@ class DBNDownBeatTrackingProcessor(Processor):
         """
         # pylint: disable=arguments-differ
         import itertools as it
-        # init the beats to return and the offset
-        beats = np.empty((0, 2))
+        # use only the activations > threshold (init offset to be added later)
         first = 0
-        # use only the activations > threshold
         if self.threshold:
             idx = np.nonzero(activations >= self.threshold)[0]
             if idx.any():
@@ -280,9 +294,9 @@ class DBNDownBeatTrackingProcessor(Processor):
             else:
                 last = first
             activations = activations[first:last]
-        # return the beats if no activations given / remain after thresholding
+        # return no beats if no activations given / remain after thresholding
         if not activations.any():
-            return beats
+            return np.empty((0, 2))
         # (parallel) decoding of the activations with HMM
         results = list(self.map(_process_dbn, zip(self.hmms,
                                                   it.repeat(activations))))
@@ -326,17 +340,9 @@ class DBNDownBeatTrackingProcessor(Processor):
             #        we could calculate the interval towards the beginning/end
             #        to decide whether to include these points
             beats = np.nonzero(np.diff(beat_numbers))[0] + 1
-        # convert the detected beats to seconds and add the beat numbers
-        if beats.any():
-            beats = np.vstack(((beats + first) / float(self.fps),
-                               beat_numbers[beats])).T
-        else:
-            beats = np.empty((0, 2))
-        # return the downbeats or beats and their beat number
-        if self.downbeats:
-            return beats[beats[:, 1] == 1][:, 0]
-        else:
-            return beats
+        # return the beat positions (converted to seconds) and beat numbers
+        return np.vstack(((beats + first) / float(self.fps),
+                          beat_numbers[beats])).T
 
     @staticmethod
     def add_arguments(parser, beats_per_bar, min_bpm=MIN_BPM, max_bpm=MAX_BPM,
@@ -472,9 +478,6 @@ class PatternTrackingProcessor(Processor):
     transition_lambda : float or list, optional
         Lambdas for the exponential tempo change distributions (higher values
         prefer constant tempi from one beat to the next .one)
-    downbeats : bool, optional
-        Report only the downbeats instead of the beats and the respective
-        position inside the bar.
     fps : float, optional
         Frames per second.
 
@@ -545,7 +548,7 @@ SpectrogramDifferenceProcessor, MultiBandSpectrogramProcessor
 
     def __init__(self, pattern_files, min_bpm=MIN_BPM, max_bpm=MAX_BPM,
                  num_tempi=NUM_TEMPI, transition_lambda=TRANSITION_LAMBDA,
-                 downbeats=False, fps=None, **kwargs):
+                 fps=None, **kwargs):
         # pylint: disable=unused-argument
         # pylint: disable=no-name-in-module
         import pickle
@@ -570,7 +573,6 @@ SpectrogramDifferenceProcessor, MultiBandSpectrogramProcessor
                              '`transition_lambda` must have the same length '
                              'as number of patterns.')
         # save some variables
-        self.downbeats = downbeats
         self.fps = fps
         self.num_beats = []
         # convert timing information to construct a state space
@@ -638,14 +640,9 @@ SpectrogramDifferenceProcessor, MultiBandSpectrogramProcessor
         #        we could calculate the interval towards the beginning/end to
         #        decide whether to include these points
         beat_positions = np.nonzero(np.diff(beat_numbers))[0] + 1
-        # stack the beat positions (converted to seconds) and beat numbers
-        beats = np.vstack((beat_positions / float(self.fps),
-                           beat_numbers[beat_positions])).T
-        # return the downbeats or beats and their beat number
-        if self.downbeats:
-            return beats[beats[:, 1] == 1][:, 0]
-        else:
-            return beats
+        # return the beat positions (converted to seconds) and beat numbers
+        return np.vstack((beat_positions / float(self.fps),
+                          beat_numbers[beat_positions])).T
 
     @staticmethod
     def add_arguments(parser, pattern_files=None, min_bpm=MIN_BPM,
@@ -1209,12 +1206,10 @@ class DBNBarTrackingProcessor(Processor):
 
     def __init__(self, beats_per_bar=(3, 4),
                  observation_weight=OBSERVATION_WEIGHT,
-                 meter_change_prob=METER_CHANGE_PROB, downbeats=False,
-                 online=False, **kwargs):
+                 meter_change_prob=METER_CHANGE_PROB, online=False, **kwargs):
         # pylint: disable=unused-argument
         # save variables
         self.beats_per_bar = beats_per_bar
-        self.downbeats = downbeats
         # state space & transition model for each bar length
         state_spaces = []
         transition_models = []
@@ -1255,14 +1250,8 @@ class DBNBarTrackingProcessor(Processor):
         """
         # get the best state path by calling the inference algorithm
         if self.online:
-            beats = self.process_online(data, **kwargs)
-        else:
-            beats = self.process_offline(data, **kwargs)
-        # return downbeats only or beats and their beat number
-        if self.downbeats:
-            return beats[beats[:, 1] == 1][:, 0]
-        else:
-            return beats
+            return self.process_online(data, **kwargs)
+        return self.process_offline(data, **kwargs)
 
     def process_online(self, data, **kwargs):
         """

@@ -80,15 +80,6 @@ class TestDBNDownBeatTrackingProcessorClass(unittest.TestCase):
         downbeats = self.processor(sample_downbeat_act)
         self.assertTrue(np.allclose(downbeats, np.empty((0, 2))))
 
-    def test_process_downbeats(self):
-        self.processor.downbeats = True
-        downbeats = self.processor(sample_downbeat_act)
-        self.assertTrue(np.allclose(downbeats, [0.09, 1.47]))
-        # set the threshold
-        self.processor.threshold = 1
-        downbeats = self.processor(sample_downbeat_act)
-        self.assertTrue(np.allclose(downbeats, np.empty((0, 2))))
-
 
 sample_pattern_features = Activations(pj(ACTIVATIONS_PATH,
                                          "sample.gmm_pattern_tracker.npz"))
@@ -101,7 +92,6 @@ class TestPatternTrackingProcessorClass(unittest.TestCase):
             PATTERNS_BALLROOM, fps=sample_pattern_features.fps)
 
     def test_types(self):
-        self.assertIsInstance(self.processor.downbeats, bool)
         self.assertIsInstance(self.processor.num_beats, list)
         self.assertIsInstance(self.processor.st, MultiPatternStateSpace)
         self.assertIsInstance(self.processor.tm, MultiPatternTransitionModel)
@@ -111,7 +101,6 @@ class TestPatternTrackingProcessorClass(unittest.TestCase):
 
     def test_values(self):
         self.assertTrue(self.processor.fps == 50)
-        self.assertTrue(self.processor.downbeats is False)
         self.assertTrue(np.allclose(self.processor.num_beats, [3, 4]))
         path, prob = self.processor.hmm.viterbi(sample_pattern_features)
         self.assertTrue(np.allclose(path[:12], [5573, 5574, 5575, 5576, 6757,
@@ -131,11 +120,6 @@ class TestPatternTrackingProcessorClass(unittest.TestCase):
         self.assertTrue(np.allclose(beats, [[0.08, 3], [0.42, 4], [0.76, 1],
                                             [1.1, 2], [1.44, 3], [1.78, 4],
                                             [2.12, 1], [2.46, 2], [2.8, 3]]))
-
-    def test_process_downbeats(self):
-        self.processor.downbeats = True
-        beats = self.processor(sample_pattern_features)
-        self.assertTrue(np.allclose(beats, [0.76, 2.12]))
 
 
 class TestBarStateSpaceClass(unittest.TestCase):
