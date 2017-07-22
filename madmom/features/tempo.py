@@ -344,7 +344,7 @@ class BaseTempoEstimationProcessor(OnlineProcessor):
         # iterate over all activations
         for activation in activations:
             # build the tempo histogram depending on the chosen method
-            histogram = self.online_interval_histogram(activation, reset=reset)
+            histogram = self.interval_histogram_online(activation, reset=reset)
             # smooth the histogram
             histogram = smooth_histogram(histogram, self.hist_smooth)
             # detect the tempo and append it to the found tempi
@@ -387,14 +387,14 @@ class BaseTempoEstimationProcessor(OnlineProcessor):
         """
         raise NotImplementedError('Must be implemented by subclass.')
 
-    def online_interval_histogram(self, activation, reset=True):
+    def interval_histogram_online(self, activations, reset=True):
         """
         Compute the histogram of the beat intervals for online mode.
         Needs to be implemented by subclass.
 
         Parameters
         ----------
-        activation : numpy float
+        activations : numpy float
             Beat activation function processed frame by frame.
         reset : bool, optional
             Reset the TempoEstimationProcessor to its initial state before
@@ -699,14 +699,14 @@ class CombFilterTempoEstimationProcessor(BaseTempoEstimationProcessor):
         return interval_histogram_comb(activations, self.alpha,
                                        self.min_interval, self.max_interval)
 
-    def online_interval_histogram(self, activation, reset=True):
+    def interval_histogram_online(self, activations, reset=True):
         """
         Compute the histogram of the beat intervals using a resonating
         comb filter bank for online mode.
 
         Parameters
         ----------
-        activation : numpy float
+        activations : numpy float
             Beat activation function processed frame by frame.
         reset : bool, optional
             Reset the CombTempoEstimationProcessor to its initial state before
@@ -718,14 +718,15 @@ class CombFilterTempoEstimationProcessor(BaseTempoEstimationProcessor):
             Bins of the tempo histogram.
         histogram_delays : numpy array
             Corresponding delays [frames].
+
         """
         # reset to initial state
         if reset:
             self.reset()
         # expand the activation for every tau
-        activation = np.full(len(self.intervals), activation, dtype=np.float)
+        activations = np.full(len(self.intervals), activations, dtype=np.float)
         # append it to the comb filter matrix
-        self.combfilter_matrix.append(activation)
+        self.combfilter_matrix.append(activations)
         # online feed backward comb filter
         min_tau = self.min_interval
         for t in self.intervals:
@@ -874,14 +875,14 @@ class ACFTempoEstimationProcessor(BaseTempoEstimationProcessor):
         return interval_histogram_acf(activations, self.min_interval,
                                       self.max_interval)
 
-    def online_interval_histogram(self, activation, reset=True):
+    def interval_histogram_online(self, activations, reset=True):
         """
         Compute the histogram of the beat intervals using auto-correlation in
         online mode.
 
         Parameters
         ----------
-        activation : numpy float
+        activations : numpy float
             Beat activation function processed frame by frame.
         reset : bool, optional
             Reset the ACFTempoEstimationProcessor to its initial state before
@@ -1004,14 +1005,14 @@ class DBNTempoEstimationProcessor(BaseTempoEstimationProcessor):
         # build a histogram together with the intervals and return it
         return bins, self.dbn.st.intervals
 
-    def online_interval_histogram(self, activation, reset=True):
+    def interval_histogram_online(self, activations, reset=True):
         """
         Compute the histogram of the beat intervals using a DBN and the
         forward algorithm.
 
         Parameters
         ----------
-        activation : numpy float
+        activations : numpy float
             Beat activation function processed frame by frame.
         reset : bool, optional
             Reset the DBNTempoEstimationProcessor to its initial state before
@@ -1029,7 +1030,7 @@ class DBNTempoEstimationProcessor(BaseTempoEstimationProcessor):
         if reset:
             self.reset()
         # use forward path to get best state
-        fwd = self.dbn.hmm.forward(activation, reset=reset)
+        fwd = self.dbn.hmm.forward(activations, reset=reset)
         # choose the best state for each step
         states = np.argmax(fwd, axis=1)
         intervals = self.dbn.st.state_intervals[states]
