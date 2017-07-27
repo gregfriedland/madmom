@@ -120,6 +120,11 @@ class TestDBNBeatTrackingProcessorClass(unittest.TestCase):
         beats = self.processor(sample_blstm_act)
         self.assertTrue(np.allclose(beats, [0.1, 0.45, 0.8, 1.12, 1.48, 1.8,
                                             2.15, 2.49]))
+        # without correcting the beat positions
+        self.processor.correct = False
+        beats = self.processor(sample_blstm_act)
+        self.assertTrue(np.allclose(beats, [0.1, 0.44, 0.78, 1.12, 1.46, 1.8,
+                                            2.14, 2.48]))
         # set the threshold
         self.processor.threshold = 1
         beats = self.processor(sample_blstm_act)

@@ -75,6 +75,13 @@ class TestDBNDownBeatTrackingProcessorClass(unittest.TestCase):
                                                 [0.79, 3], [1.12, 4],
                                                 [1.47, 1], [1.8, 2],
                                                 [2.14, 3], [2.49, 4]]))
+        # without correcting the beat positions
+        self.processor.correct = False
+        downbeats = self.processor(sample_downbeat_act)
+        self.assertTrue(np.allclose(downbeats, [[0.08, 1], [0.43, 2],
+                                                [0.77, 3], [1.11, 4],
+                                                [1.45, 1], [1.79, 2],
+                                                [2.13, 3], [2.47, 4]]))
         # set the threshold
         self.processor.threshold = 1
         downbeats = self.processor(sample_downbeat_act)
