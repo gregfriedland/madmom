@@ -55,10 +55,10 @@ def main():
     p.add_argument('--version', action='version',
                    version='SpectralOnsetDetection')
     # add arguments
-    io_arguments(p, output_suffix='.onsets.txt')
+    io_arguments(p, output_suffix='.onsets.txt', online=True)
     ActivationsProcessor.add_arguments(p)
     SignalProcessor.add_arguments(p, norm=False, gain=0)
-    FramedSignalProcessor.add_arguments(p, fps=100, online=False)
+    FramedSignalProcessor.add_arguments(p, fps=100, online=True)
     FilterbankProcessor.add_arguments(p, filterbank=LogarithmicFilterbank,
                                       num_bands=12, fmin=30, fmax=17000,
                                       norm_filters=False)

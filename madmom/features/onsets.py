@@ -675,13 +675,14 @@ class SpectralOnsetProcessor(SequentialProcessor):
         if 'log' in kwargs.keys() and kwargs['log'] is not None:
             processors.append(LogarithmicSpectrogramProcessor(**kwargs))
         # odf function
-        if not inspect.isfunction(onset_method):
-            try:
-                onset_method = globals()[onset_method]
-            except KeyError:
-                raise ValueError('%s not a valid onset detection function, '
-                                 'choose %s.' % (onset_method, self.METHODS))
-            processors.append(onset_method)
+        # if not inspect.isfunction(onset_method):
+        #     try:
+        #         onset_method = globals()[onset_method]
+        #     except KeyError:
+        #         raise ValueError('%s not a valid onset detection function, '
+        #                          'choose %s.' % (onset_method, self.METHODS))
+        #     processors.append(onset_method)
+        processors.append(SpectralFluxProcessor())
         # instantiate a SequentialProcessor
         super(SpectralOnsetProcessor, self).__init__(processors)
 
@@ -1324,3 +1325,12 @@ class OnsetPeakPickingProcessor(Processor):
                                 '[default=%(default)i]')
         # return the argument group so it can be modified if needed
         return g
+
+class SpectralFluxProcessor(SequentialProcessor):
+    def __init__(self, **kwargs):
+        from functools import partial
+        from madmom.audio.spectrogram import SpectrogramDifferenceProcessor
+        diff = SpectrogramDifferenceProcessor(diff_frames=1,
+                                              positive_diffs=True)
+        sum = partial(np.sum, axis=1)
+        super(SpectralFluxProcessor, self).__init__([diff, sum])

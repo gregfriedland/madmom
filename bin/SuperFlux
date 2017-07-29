@@ -53,10 +53,10 @@ def main():
     # version
     p.add_argument('--version', action='version', version='SuperFlux.2016')
     # add arguments
-    io_arguments(p, output_suffix='.onsets.txt')
+    io_arguments(p, output_suffix='.onsets.txt', online=True)
     ActivationsProcessor.add_arguments(p)
     SignalProcessor.add_arguments(p, norm=False, gain=0)
-    FramedSignalProcessor.add_arguments(p, fps=200)
+    FramedSignalProcessor.add_arguments(p, fps=100)
     FilterbankProcessor.add_arguments(p, num_bands=24, fmin=30, fmax=17000,
                                       norm_filters=False)
     LogarithmicSpectrogramProcessor.add_arguments(p, log=True, mul=1, add=1)
