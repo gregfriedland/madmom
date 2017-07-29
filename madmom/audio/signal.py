@@ -760,7 +760,7 @@ class Signal(np.ndarray):
         if gain is not None and gain != 0:
             data = adjust_gain(data, gain)
         # resample if needed
-        if sample_rate != data.sample_rate:
+        if sample_rate and sample_rate != data.sample_rate:
             data = resample(data, sample_rate)
         # save start and stop position
         if start is not None:
