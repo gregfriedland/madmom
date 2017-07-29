@@ -682,7 +682,7 @@ class SpectralOnsetProcessor(SequentialProcessor):
         #         raise ValueError('%s not a valid onset detection function, '
         #                          'choose %s.' % (onset_method, self.METHODS))
         #     processors.append(onset_method)
-        processors.append(SpectralFluxProcessor())
+        processors.append(SpectralFluxProcessor(**kwargs))
         # instantiate a SequentialProcessor
         super(SpectralOnsetProcessor, self).__init__(processors)
 
@@ -1327,10 +1327,14 @@ class OnsetPeakPickingProcessor(Processor):
         return g
 
 class SpectralFluxProcessor(SequentialProcessor):
-    def __init__(self, **kwargs):
+    def __init__(self, diff_frames=None, diff_max_bins=None, positive_diffs=None,
+                 **kwargs):
         from functools import partial
         from madmom.audio.spectrogram import SpectrogramDifferenceProcessor
-        diff = SpectrogramDifferenceProcessor(diff_frames=1,
-                                              positive_diffs=True)
+        print("Creating SpectrogramDifferenceProcessor: ", diff_frames,
+            diff_max_bins, positive_diffs, kwargs)
+        diff = SpectrogramDifferenceProcessor(diff_frames=diff_frames,
+                                              diff_max_bins=diff_max_bins,
+                                              positive_diffs=positive_diffs)
         sum = partial(np.sum, axis=1)
         super(SpectralFluxProcessor, self).__init__([diff, sum])
