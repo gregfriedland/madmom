@@ -876,7 +876,7 @@ class CNNOnsetProcessor(SequentialProcessor):
 
 # universal peak-picking method
 def peak_picking(activations, threshold, smooth=None, pre_avg=0, post_avg=0,
-                 pre_max=1, post_max=1):
+                 pre_max=1, post_max=1, remove_zeros=True):
     """
     Perform thresholding and peak-picking on the given activation function.
 
@@ -924,6 +924,7 @@ def peak_picking(activations, threshold, smooth=None, pre_avg=0, post_avg=0,
     """
     # smooth activations
     activations = smooth_signal(activations, smooth)
+
     # compute a moving average
     avg_length = pre_avg + post_avg + 1
     if avg_length > 1:
@@ -958,13 +959,20 @@ def peak_picking(activations, threshold, smooth=None, pre_avg=0, post_avg=0,
         # detections are peak positions
         detections *= (detections == mov_max)
     # return indices
-    if activations.ndim == 1:
-        return np.nonzero(detections)[0]
-    elif activations.ndim == 2:
-        return np.nonzero(detections)
+    if remove_zeros:
+        if activations.ndim == 1:
+            return np.nonzero(detections)[0]
+        elif activations.ndim == 2:
+            return np.nonzero(detections)
+        else:
+            raise ValueError('`activations` must be either 1D or 2D')
     else:
-        raise ValueError('`activations` must be either 1D or 2D')
-
+        if activations.ndim == 1:
+            return detections
+        elif activations.ndim == 2:
+            return detections[:,-1]
+        else:
+            raise ValueError('`activations` must be either 1D or 2D')
 
 class PeakPickingProcessor(Processor):
     """
@@ -1017,7 +1025,6 @@ class PeakPickingProcessor(Processor):
 
         """
         return OnsetPeakPickingProcessor.add_arguments(parser, **kwargs)
-
 
 class OnsetPeakPickingProcessor(Processor):
     """
@@ -1219,6 +1226,7 @@ class OnsetPeakPickingProcessor(Processor):
         timings = np.round(timings).astype(int)
         # detect the peaks (function returns int indices)
         peaks = peak_picking(buffer, self.threshold, *timings)
+
         # convert to onset timings
         onsets = (self.counter + peaks) / float(self.fps)
         # increase counter
@@ -1243,6 +1251,7 @@ class OnsetPeakPickingProcessor(Processor):
             else:
                 # don't report an onset
                 onsets = np.empty(0)
+
         # return the onsets
         return onsets
 
@@ -1326,15 +1335,95 @@ class OnsetPeakPickingProcessor(Processor):
         # return the argument group so it can be modified if needed
         return g
 
+# Added by Greg Friedland 7/29/2017
+class OnsetPeakPickingWithBandProcessor(OnsetPeakPickingProcessor):
+    def __init__(self, num_bins=7, bin_threshold=1, **kwargs):
+        self.num_bins = num_bins
+        self.bin_threshold = bin_threshold
+        super(OnsetPeakPickingWithBandProcessor, self).__init__(**kwargs)
+
+    def process_online(self, activations, reset=True, **kwargs):
+        """
+        Detect the onsets in the given activation function.
+
+        Parameters
+        ----------
+        activations : numpy array
+            Onset activation function.
+
+        Returns
+        -------
+        onsets : numpy array
+            Detected onsets [seconds].
+
+        """
+        # buffer data
+        if self.buffer is None or reset:
+            # reset the processor
+            self.reset()
+            # put 0s in front (depending on conext given by pre_max
+            init = np.zeros(int(np.round(self.pre_max * self.fps)))
+            # print("init:", init.shape)
+            buffer = np.insert(activations.reshape(len(activations),1), 0, init, axis=1)
+            # offset the counter, because we buffer the activations
+            self.counter = -len(init)
+            # use the data for the buffer
+            self.buffer = BufferProcessor(init=buffer)
+        else:
+            buffer = self.buffer(activations.reshape(len(activations),1))
+        # convert timing information to frames and set default values
+        # TODO: use at least 1 frame if any of these values are > 0?
+        timings = np.array([self.smooth, self.pre_avg, self.post_avg,
+                            self.pre_max, self.post_max]) * self.fps
+        timings = np.round(timings).astype(int)
+        # detect the peaks (function returns int indices)
+        peaks = peak_picking(buffer, self.threshold, *timings, remove_zeros=False)
+
+        # convert to onsets
+        binned_peaks = peaks.reshape((self.num_bins, -1)).sum(axis=1)
+        onsets = binned_peaks > self.bin_threshold
+
+        t = self.counter / float(self.fps)
+        self.counter += 1
+
+        # shift if necessary
+        if self.delay:
+            raise ValueError('delay not supported yet in online mode')
+        # report only if there was no onset within the last combine seconds
+        if self.combine and onsets.any():
+            # prepend the last onset to be able to combine them correctly
+            if self.last_onset is not None:
+                onsets[t - self.last_onset - self.combine < 1e-12] = 0
+                self.last_onset[onsets] = t
+            else:
+                self.last_onset = onsets * t
+
+        if False and onsets.any():
+            # print("buffer:", buffer.shape)
+            # print("activations:", activations.shape, activations)
+            print("peaks", peaks.shape, peaks)
+            print("binned_peaks", binned_peaks)
+            print("last_onset:", self.last_onset)
+
+            print("onsets:", onsets.shape, onsets)
+            print("\n\n\n\n")
+
+        # return the onsets
+        return onsets.astype(int)
+
+# Added by Greg Friedland 7/29/2017
 class SpectralFluxProcessor(SequentialProcessor):
     def __init__(self, diff_frames=None, diff_max_bins=None, positive_diffs=None,
                  **kwargs):
-        from functools import partial
         from madmom.audio.spectrogram import SpectrogramDifferenceProcessor
         print("Creating SpectrogramDifferenceProcessor: ", diff_frames,
             diff_max_bins, positive_diffs, kwargs)
         diff = SpectrogramDifferenceProcessor(diff_frames=diff_frames,
                                               diff_max_bins=diff_max_bins,
                                               positive_diffs=positive_diffs)
-        sum = partial(np.sum, axis=1)
-        super(SpectralFluxProcessor, self).__init__([diff, sum])
+        from functools import partial
+        # sum = partial(np.sum, axis=1)
+        # super(SpectralFluxProcessor, self).__init__([diff, sum])
+
+        flatten = lambda a: a.flatten()
+        super(SpectralFluxProcessor, self).__init__([diff, flatten])

@@ -8,6 +8,7 @@ Spectral onset detection script.
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import numpy as np
 
 from madmom.processors import IOProcessor, io_arguments
 from madmom.audio.signal import SignalProcessor, FramedSignalProcessor
@@ -16,10 +17,13 @@ from madmom.audio.spectrogram import (LogarithmicSpectrogramProcessor,
                                       SpectrogramDifferenceProcessor)
 from madmom.features import ActivationsProcessor
 from madmom.features.onsets import (SpectralOnsetProcessor,
-                                    OnsetPeakPickingProcessor)
+                                    OnsetPeakPickingWithBandProcessor)
 from madmom.audio.spectrogram import (DIFF_RATIO, DIFF_FRAMES,
                                       DIFF_MAX_BINS, POSITIVE_DIFFS)
 
+def write_array(data, fh):
+    if len(data.shape) > 0 and data.sum() > 0:
+        print(data.tolist(), file=fh)
 
 def main():
     """SpectralOnsetDetection"""
@@ -67,8 +71,8 @@ def main():
     LogarithmicSpectrogramProcessor.add_arguments(p, log=True, mul=1, add=1)
     SpectrogramDifferenceProcessor.add_arguments(p, diff_ratio=DIFF_RATIO, diff_max_bins=DIFF_MAX_BINS,
                                                  positive_diffs=POSITIVE_DIFFS, diff_frames=DIFF_FRAMES)
-    SpectralOnsetProcessor.add_arguments(p, onset_method='spectral_flux')
-    OnsetPeakPickingProcessor.add_arguments(p, threshold=3, pre_max=0.01,
+    SpectralOnsetProcessor.add_arguments(p, onset_method='superflux')
+    OnsetPeakPickingWithBandProcessor.add_arguments(p, threshold=0.1, pre_max=0.01,
                                             post_max=0.05, pre_avg=0.15,
                                             post_avg=0, combine=0.1, delay=0)
     # parse arguments
@@ -114,10 +118,11 @@ def main():
         out_processor = ActivationsProcessor(mode='w', **vars(args))
     else:
         # perform peak picking of the onset function
-        peak_picking = OnsetPeakPickingProcessor(**vars(args))
+        peak_picking = OnsetPeakPickingWithBandProcessor(**vars(args))
+
         from madmom.utils import write_events as writer
         # sequentially process them
-        out_processor = [peak_picking, writer]
+        out_processor = [peak_picking, write_array]
 
     # create an IOProcessor
     processor = IOProcessor(in_processor, out_processor)
