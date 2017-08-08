@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python -u
 # encoding: utf-8
 """
 Spectral onset detection script.
@@ -23,7 +23,7 @@ from madmom.audio.spectrogram import (DIFF_RATIO, DIFF_FRAMES,
 
 def write_array(data, fh):
     if len(data.shape) > 0 and data.sum() > 0:
-        print(data.tolist(), file=fh)
+        print("[" + "".join(map(str, data)) + "]", file=fh)
 
 def main():
     """SpectralOnsetDetection"""
@@ -74,7 +74,8 @@ def main():
     SpectralOnsetProcessor.add_arguments(p, onset_method='superflux')
     OnsetPeakPickingWithBandProcessor.add_arguments(p, threshold=0.1, pre_max=0.01,
                                             post_max=0.05, pre_avg=0.15,
-                                            post_avg=0, combine=0.1, delay=0)
+                                            post_avg=0, combine=0.1, delay=0,
+                                            num_onset_bins=1)
     # parse arguments
     args = p.parse_args()
 

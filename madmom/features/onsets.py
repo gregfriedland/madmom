@@ -20,7 +20,6 @@ from ..utils import combine_events
 
 EPSILON = np.spacing(1)
 
-
 # onset detection helper functions
 def wrap_to_pi(phase):
     """
@@ -1337,8 +1336,10 @@ class OnsetPeakPickingProcessor(Processor):
 
 # Added by Greg Friedland 7/29/2017
 class OnsetPeakPickingWithBandProcessor(OnsetPeakPickingProcessor):
-    def __init__(self, num_bins=7, bin_threshold=1, **kwargs):
-        self.num_bins = num_bins
+    NUM_ONSET_BINS = 7
+
+    def __init__(self, num_onset_bins=NUM_ONSET_BINS, bin_threshold=1, **kwargs):
+        self.num_onset_bins = num_onset_bins
         self.bin_threshold = bin_threshold
         super(OnsetPeakPickingWithBandProcessor, self).__init__(**kwargs)
 
@@ -1380,7 +1381,7 @@ class OnsetPeakPickingWithBandProcessor(OnsetPeakPickingProcessor):
         peaks = peak_picking(buffer, self.threshold, *timings, remove_zeros=False)
 
         # convert to onsets
-        binned_peaks = peaks.reshape((self.num_bins, -1)).sum(axis=1)
+        binned_peaks = peaks.reshape((self.num_onset_bins, -1)).sum(axis=1)
         onsets = binned_peaks > self.bin_threshold
 
         t = self.counter / float(self.fps)
@@ -1411,13 +1412,21 @@ class OnsetPeakPickingWithBandProcessor(OnsetPeakPickingProcessor):
         # return the onsets
         return onsets.astype(int)
 
+    @staticmethod
+    def add_arguments(parser, num_onset_bins=NUM_ONSET_BINS, **kwargs):
+        OnsetPeakPickingProcessor.add_arguments(parser, **kwargs)
+        g = parser.add_argument_group('peak-picking with band arguments')
+        g.add_argument('--num_onset_bins', action='store', type=int,
+                       default=num_onset_bins,
+                       help='num onset bins [default=%(default)d]')
+
 # Added by Greg Friedland 7/29/2017
 class SpectralFluxProcessor(SequentialProcessor):
     def __init__(self, diff_frames=None, diff_max_bins=None, positive_diffs=None,
                  **kwargs):
         from madmom.audio.spectrogram import SpectrogramDifferenceProcessor
-        print("Creating SpectrogramDifferenceProcessor: ", diff_frames,
-            diff_max_bins, positive_diffs, kwargs)
+        # print("Creating SpectrogramDifferenceProcessor: ", diff_frames,
+        #     diff_max_bins, positive_diffs, kwargs)
         diff = SpectrogramDifferenceProcessor(diff_frames=diff_frames,
                                               diff_max_bins=diff_max_bins,
                                               positive_diffs=positive_diffs)
